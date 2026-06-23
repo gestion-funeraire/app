@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>COLOMBE — Morgue NGE</title>
+<title>Gestion Funéraire</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
-:root{--night:#0d1117;--surface:#161b22;--panel:#21262d;--border:#30363d;--muted:#484f58;--text-dim:#8b949e;--text:#c9d1d9;--white:#f0f6fc;--blue:#388bfd;--blue-dim:#1f6feb;--green:#3fb950;--green-dim:#238636;--orange:#d29922;--red:#f85149;--red-dim:#da3633;--purple:#8957e5;--accent:#58a6ff;--gold:#e3b341;}
+:root{--night:#0d0d0d;--surface:#111111;--panel:#1a1a1a;--border:#2a2a2a;--muted:#444444;--text-dim:#8b8b8b;--text:#d4d0c8;--white:#f7f4ee;--blue:#C8973A;--blue-dim:#a67828;--green:#3fb950;--green-dim:#238636;--orange:#d29922;--red:#f85149;--red-dim:#da3633;--purple:#8957e5;--accent:#C8973A;--gold:#C8973A;}
 /* ══ RESET & BASE ══ */
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;overflow:hidden;}
@@ -113,7 +113,7 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--night);color:var(--
 /* ══ BOUTONS ══ */
 .btn{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:6px;font-size:13px;font-family:inherit;font-weight:500;cursor:pointer;border:1px solid var(--border);background:var(--panel);color:var(--text);white-space:nowrap;user-select:none;}
 .btn:active{opacity:.75;}
-.btn-primary{background:var(--blue-dim);border-color:var(--blue);color:#fff;}
+.btn-primary{background:var(--gold);border-color:var(--gold);color:#0d0d0d;font-weight:600;}
 .btn-success{background:var(--green-dim);border-color:var(--green);color:#fff;}
 .btn-danger{background:var(--red-dim);border-color:var(--red);color:#fff;}
 .btn-warning{background:#7d4e00;border-color:var(--orange);color:var(--orange);}
@@ -279,10 +279,13 @@ tr:last-child td{border-bottom:none;}
   <div id="inscription-error" class="error-msg"></div>
   <div class="field"><label>Nom de l'établissement *</label><input type="text" id="ins-etab" placeholder="Ex: Morgue Saint-Joseph"></div>
   <div class="field"><label>Votre nom complet *</label><input type="text" id="ins-nom" placeholder="Votre nom et prénoms"></div>
+  <div class="field"><label>Numéro WhatsApp *</label><input type="tel" id="ins-tel" placeholder="Ex: +229 0123456789"></div>
+  <div class="field"><label>Pays</label><select id="ins-pays"><option value="Bénin">🇧🇯 Bénin</option><option value="Togo">🇹🇬 Togo</option><option value="Côte d'Ivoire">🇨🇮 Côte d'Ivoire</option><option value="Sénégal">🇸🇳 Sénégal</option><option value="Cameroun">🇨🇲 Cameroun</option><option value="RDC">🇨🇩 RDC</option><option value="Autre">🌍 Autre</option></select></div>
   <div class="field"><label>Identifiant de connexion *</label><input type="text" id="ins-login" placeholder="Ex: promoteur2" autocomplete="off"></div>
   <div class="field"><label>Mot de passe *</label><input type="password" id="ins-pass" placeholder="Au moins 4 caractères" autocomplete="new-password"></div>
   <div class="field"><label>Confirmer le mot de passe *</label><input type="password" id="ins-pass2" placeholder="Confirmer" autocomplete="new-password"></div>
-  <button class="btn btn-primary btn-full" style="margin-top:4px" onclick="doInscription()">✓ Créer mon compte</button>
+  <p style="font-size:11px;color:var(--text-dim);margin-bottom:12px;text-align:center;">🎁 15 jours d'essai gratuit — aucune carte requise</p>
+  <button class="btn btn-primary btn-full" style="margin-top:4px" onclick="doInscription()">✓ Créer mon compte gratuitement</button>
   <p style="font-size:12px;text-align:center;margin-top:14px">
    <a href="#" onclick="el('inscription-screen').style.display='none';el('login-screen').style.display='flex';return false;" style="color:var(--blue)">← Retour à la connexion</a>
   </p>
@@ -1451,7 +1454,7 @@ function afficherInscription(){
  el('login-screen').style.display='none';
  el('inscription-screen').style.display='flex';
  el('inscription-error').style.display='none';
- ['ins-etab','ins-nom','ins-login','ins-pass','ins-pass2'].forEach(function(id){el(id).value='';});
+ ['ins-etab','ins-nom','ins-tel','ins-login','ins-pass','ins-pass2'].forEach(function(id){el(id).value='';});
 }
 async function doInscription(){
  var etab=v('ins-etab').trim(),nom=v('ins-nom').trim(),login=v('ins-login').trim().toLowerCase(),
@@ -1474,7 +1477,17 @@ async function doInscription(){
  var data=res.data;
  if(!data.success){err.textContent=data.error||'Une erreur est survenue.';err.style.display='block';return;}
 
- alert('✓ Compte créé avec succès !\n\nÉtablissement : '+etab+'\nIdentifiant : '+login+'\n\nVous pouvez maintenant vous connecter.');
+ /* Enregistrer téléphone, pays et date_essai_debut */
+ if(data.organisation_id){
+  await sb.from('organisations').update({
+   date_essai_debut: new Date().toISOString(),
+   abonnement_actif: false,
+   type_abonnement: 'essai'
+  }).eq('id', data.organisation_id);
+  await sb.from('app_data').upsert({organisation_id:data.organisation_id,cle:'contact_whatsapp',valeur:v('ins-tel').trim()},{onConflict:'organisation_id,cle'});
+  await sb.from('app_data').upsert({organisation_id:data.organisation_id,cle:'pays',valeur:v('ins-pays')},{onConflict:'organisation_id,cle'});
+ }
+ alert('✓ Compte créé avec succès !\n\nÉtablissement : '+etab+'\nIdentifiant : '+login+'\n\nVous bénéficiez de 15 jours d\'essai gratuit.\nConnectez-vous dès maintenant !');
  el('inscription-screen').style.display='none';
  el('login-screen').style.display='flex';
  el('login-user').value=login;
@@ -1746,22 +1759,4 @@ function confRetrait(num){
   '<b style="color:var(--white)">'+c.nom+' '+c.pre+'</b>'
   +'<div style="font-size:11px;color:var(--text-dim);margin-top:4px">'
   +'N° '+c.num+' · Arrivée : '+fd(c.arr)+' · '+jC(c.arr,c.dateRet)+' jours de conservation</div>'
-  +'<div style="font-size:11px;margin-top:6px">'
-  +'<span style="color:var(--text-dim)">Total facturé : </span><b>'+fcfa(f.total)+'</b>'
-  +' &nbsp;|&nbsp; <span style="color:var(--text-dim)">Payé : </span><b style="color:var(--green)">'+fcfa(paye)+'</b>'
-  +' &nbsp;|&nbsp; <span style="color:var(--text-dim)">Reste à payer : </span><b style="color:'+(solde>0?'var(--orange)':'var(--green)')+'">'+fcfa(solde)+'</b>'
-  +'</div>';
- var sw=el('retrait-solde-warn');
- if(solde>0){
-  var isJustice=(c.justice==='exo_cons'||c.justice==='gratuit'||c.justice==='partiel');
-  if(isJustice){
-   sw.style.display='block';sw.style.background='rgba(56,139,253,.1)';sw.style.borderColor='rgba(56,139,253,.3)';sw.style.color='var(--blue)';
-   sw.textContent='ℹ️ Dossier sous main de justice — reste à payer de '+fcfa(solde)+'. Le retrait est autorisé selon la décision judiciaire.';
-  } else {
-   sw.style.display='block';sw.style.background='rgba(248,81,73,.1)';sw.style.borderColor='rgba(248,81,73,.3)';sw.style.color='var(--red)';
-   sw.innerHTML='🚫 <b>Retrait bloqué</b> — Solde impayé : <b>'+fcfa(solde)+'</b>.<br>Le retrait est impossible tant que la facture n\'est pas soldée. Veuillez d\'abord enregistrer le paiement complet dans Facturation.';
-  }
- }
- else sw.style.display='none';
- /* Vider les champs */
- ['ret-photo-proc',
+  +'<div style="font-size:

@@ -367,6 +367,10 @@ tr:last-child td{border-bottom:none;}
     <div class="nav-item admin-only" onclick="navTo('utilisateurs',this)"><span class="icon">🔐</span>Utilisateurs</div>
     <div class="nav-item admin-only" onclick="navTo('parametres',this)"><span class="icon">⚙️</span>Paramètres</div>
    </div>
+   <div class="nav-section agent-hidden">
+    <div class="nav-label">Abonnement</div>
+    <div class="nav-item" id="nav-abonnement" onclick="ouvrirAbonnement()"><span class="icon">💎</span>Mon abonnement<span class="nav-badge warn" id="badge-abo" style="display:none">!</span></div>
+   </div>
    <div class="nav-section">
     <div class="nav-label">Session</div>
     <div class="nav-item" onclick="doLogout()"><span class="icon">⏻</span>Déconnexion</div>
@@ -411,7 +415,7 @@ tr:last-child td{border-bottom:none;}
        <button class="btn btn-sm btn-primary" onclick="lancerRecherche('search-corps','tbl-corps')">🔍 Rechercher</button>
        <button class="btn btn-sm" onclick="el('search-corps').value='';filterT2('tbl-corps','')">✕ Reset</button>
       </div>
-      <button class="btn btn-primary btn-sm" onclick="openModal('modal-corps')">+ Enregistrer un corps</button>
+      <button class="btn btn-primary btn-sm" onclick="verifierEtOuvrirCorps()">+ Enregistrer un corps</button>
      </div>
      <div class="tbl-scroll"><table><thead><tr><th>N°</th><th>Nom</th><th>Prénoms</th><th>Sexe</th><th>Âge</th><th>Arrivée</th><th>Jours</th><th>Formol</th><th>Statut</th><th>Actions</th></tr></thead><tbody id="tbl-corps"><tr><td colspan="10" class="empty-state">Aucun corps enregistré</td></tr></tbody></table></div>
     </div>
@@ -1420,6 +1424,8 @@ async function entrerApp(u){
   document.querySelectorAll('.admin-only').forEach(function(x){x.style.display='';});
  }
  await chargerCloud().then(function(res){if(res&&res.ts)DERNIER_CLOUD_TS=res.ts;});
+ /* Charger le plan d'abonnement de l'organisation */
+ await chargerPlanAbonnement();
  applyIdentite();
  updateBadgeNotifs();
  initApp(); startClock(); initPhotoFields();
@@ -1578,6 +1584,74 @@ async function doLogout(){
  el('app').style.display='none'; el('login-screen').style.display='flex';
  el('login-user').value=''; el('login-pass').value='';
 }
+/* ════ ABONNEMENT & LIMITES ════ */
+var PLAN_ABONNEMENT = {
+ plan: 'gratuit',       /* 'gratuit','starter','pro','premium' */
+ actif: false,
+ expiration: null,
+ joursEssai: 0,
+ statut: 'essai'        /* 'actif','essai','expiré' */
+};
+
+/* Limites par plan */
+var LIMITES_PLAN = {
+ gratuit:  { corps_mois: 50,  structures: 1 },
+ starter:  { corps_mois: 50,  structures: 1 },
+ pro:      { corps_mois: 9999, structures: 3 },
+ premium:  { corps_mois: 9999, structures: 9999 }
+};
+
+async function chargerPlanAbonnement(){
+ if(!ORG_ID)return;
+ try{
+  var r=await sb.from('v_statut_abonnement').select('*').eq('id',ORG_ID).single();
+  if(r.data){
+   PLAN_ABONNEMENT.plan    = r.data.abonnement_plan || 'gratuit';
+   PLAN_ABONNEMENT.actif   = r.data.abonnement_actif || false;
+   PLAN_ABONNEMENT.expiration = r.data.abonnement_expiration;
+   PLAN_ABONNEMENT.statut  = r.data.statut_global || 'essai';
+   PLAN_ABONNEMENT.joursEssai = r.data.jours_restants || 0;
+  }
+  /* Afficher badge si essai ou expiré */
+  var badge=el('badge-abo');
+  if(badge){
+   if(PLAN_ABONNEMENT.statut==='expiré'){badge.textContent='EXP';badge.style.display='';}
+   else if(PLAN_ABONNEMENT.statut==='essai'&&PLAN_ABONNEMENT.joursEssai<=5){badge.textContent=PLAN_ABONNEMENT.joursEssai+'j';badge.style.display='';}
+   else badge.style.display='none';
+  }
+ }catch(e){console.warn('Erreur chargement plan:',e);}
+}
+
+function getLimitePlan(){
+ var plan=PLAN_ABONNEMENT.plan||'gratuit';
+ return LIMITES_PLAN[plan]||LIMITES_PLAN['gratuit'];
+}
+
+function verifierLimiteCorps(){
+ /* Compter les corps enregistrés ce mois */
+ var debut=new Date(); debut.setDate(1); debut.setHours(0,0,0,0);
+ var moisCourant=today().substring(0,7); /* YYYY-MM */
+ var corpsMois=corps.filter(function(c){
+  return c.arr&&c.arr.substring(0,7)===moisCourant;
+ }).length;
+ var limite=getLimitePlan().corps_mois;
+ if(corpsMois>=limite){
+  return {ok:false,message:'⚠️ Limite atteinte\n\nVotre plan '+PLAN_ABONNEMENT.plan.charAt(0).toUpperCase()+PLAN_ABONNEMENT.plan.slice(1)+' est limité à '+limite+' corps par mois.\n\nVous avez enregistré '+corpsMois+' corps ce mois-ci.\n\nUpgradez votre abonnement pour continuer.'};
+ }
+ return {ok:true};
+}
+
+function verifierEtOuvrirCorps(){
+ var chk=verifierLimiteCorps();
+ if(!chk.ok){alert(chk.message);return;}
+ openModal('modal-corps');
+}
+
+function ouvrirAbonnement(){
+ closeSidebar();
+ window.open('abonnement.html','_blank');
+}
+
 async function forceLogoutDesactive(){
  await sb.auth.signOut();
  CU=null;
@@ -1708,55 +1782,4 @@ function rdDash(){
  else da.style.display='none';
  el('dash-tbl').innerHTML=cons.length?cons.map(function(c){
   var jr=jR(c.arr),bd=jr<0?'badge-red':jr<=5?'badge-orange':'badge-green';
-  var lb=jr<0?'Dépassé':jr<=5?jr+'j restants':'Normal';
-  return'<tr><td class="mono">'+c.num+'</td><td><b>'+c.nom+'</b> '+c.pre+'</td><td>'+fd(c.arr)+'</td><td class="mono">'+jC(c.arr,c.dateRet)+'j</td><td>'+fd(ech(c.arr))+'</td><td><span class="badge '+bd+'">'+lb+'</span></td></tr>';
- }).join(''):'<tr><td colspan="6" class="empty-state">Aucun corps conservé</td></tr>';
-}
-
-/* ════ CORPS ════ */
-function rdCorps(){
- el('tbl-corps').innerHTML=corps.length?corps.map(function(c){
-  var jr=jR(c.arr),bd=c.st==='Retiré'?'badge-muted':jr<0?'badge-red':jr<=5?'badge-orange':'badge-green';
-  var lb=c.st==='Retiré'?'Retiré':jr<0?'Dépassé':jr<=5?jr+'j':'Normal';
-  var isGerant=CU&&(CU.role==='Gérant'||CU.role==='Promoteur');
-  /* Statut paiement visible uniquement pour Gérant/Promoteur */
-  var pmtStatut='';
-  if(isGerant){
-   var f=calcF(c),paye=c.pmts.reduce(function(s,p){return s+p;},0),solde=Math.max(0,f.total-paye);
-   pmtStatut=solde<=0?'<span class="badge badge-green">Soldé</span>':'<span class="badge badge-orange">'+fcfa(solde)+'</span>';
-  }
-  return'<tr><td class="mono">'+c.num+'</td><td><b>'+c.nom+'</b></td><td>'+c.pre+'</td><td>'+c.sx+'</td><td>'+c.age+'a</td><td>'+fd(c.arr)+'</td><td class="mono">'+jC(c.arr,c.dateRet)+'j</td><td class="mono">'+c.fml+'L</td>'
-  +'<td><span class="badge '+bd+'">'+lb+'</span></td>'
-  +(isGerant?'<td>'+pmtStatut+'</td>':'')
-  +'<td style="white-space:nowrap"><button class="btn btn-sm" onclick="voirD(\''+c.num+'\')">Dossier</button>'
-  +(c.st!=='Retiré'&&isGerant?'<button class="btn btn-sm btn-primary" onclick="versF(\''+c.num+'\')">Facturer</button>':'')
-  +'</td></tr>';
- }).join(''):'<tr><td colspan="10" class="empty-state">Aucun corps enregistré</td></tr>';
-}
-
-/* ════ RECHERCHE ════ */
-function lancerRecherche(inputId,tableId){
- var q=document.getElementById(inputId).value.toLowerCase().trim();
- filterT2(tableId,q);
-}
-function filterT2(tableId,q){
- document.querySelectorAll('#'+tableId+' tr').forEach(function(tr){
-  tr.style.display=(q===''||tr.textContent.toLowerCase().includes(q))?'':'none';
- });
-}
-/* Recherche à la volée sur Enter */
-function searchOnEnter(e,inputId,tableId){if(e.key==='Enter')lancerRecherche(inputId,tableId);}
-
-/* ════ RETRAIT AVEC DOCUMENTS ════ */
-var retraitNumCourant=null;
-
-function confRetrait(num){
- var c=null;for(var i=0;i<corps.length;i++){if(corps[i].num===num){c=corps[i];break;}}
- if(!c)return;
- retraitNumCourant=num;
- var f=calcF(c),paye=c.pmts.reduce(function(s,p){return s+p;},0),solde=f.total-paye;
- el('retrait-info-defunt').innerHTML=
-  '<b style="color:var(--white)">'+c.nom+' '+c.pre+'</b>'
-  +'<div style="font-size:11px;color:var(--text-dim);margin-top:4px">'
-  +'N° '+c.num+' · Arrivée : '+fd(c.arr)+' · '+jC(c.arr,c.dateRet)+' jours de conservation</div>'
-  +'<div style="font-size:
+  var lb=jr<0?'

@@ -1,7 +1,3 @@
-+'<td>'+d.benef+(d.benefTel&&d.benefTel!=='—'?'<br><span style="color:var(--text-dim);font-size:11px">📞 '+d.benefTel+'</span>':'')+'</td><td style="color:var(--text-dim)">'+d.motif+'</td>'
-+'<td><span class="badge badge-muted">'+d.mode+'</span></td><td>'+photoHtml+'</td></tr>';
-}).join(''):'<tr><td colspan="7" class="empty-state">Aucune dépense</td></tr>';
-}
 function voirPhoto(num,type){
 var d=null;for(var i=0;i<depenses.length;i++){if(depenses[i].num===num){d=depenses[i];break;}}
 if(!d)return;

@@ -1380,3 +1380,7 @@ if(d.photoData){photoHtml='<img src="'+d.photoData+'" onclick="voirPhoto(\''+d.n
 else if(d.captureData){photoHtml='<img src="'+d.captureData+'" onclick="voirPhoto(\''+d.num+'\',\'capture\')" style="height:28px;border-radius:4px;cursor:pointer;border:1px solid var(--border)" title="Voir la capture">';}
 else if(d.photo){photoHtml='<span style="color:var(--green);font-size:11px">📷</span>';}
 return'<tr><td class="mono">'+d.num+'</td><td>'+fd(d.date)+'</td><td class="mono" style="color:var(--red)">'+fcfa(d.mt)+'</td>'
++'<td>'+d.benef+(d.benefTel&&d.benefTel!=='—'?'<br><span style="color:var(--text-dim);font-size:11px">📞 '+d.benefTel+'</span>':'')+'</td><td style="color:var(--text-dim)">'+d.motif+'</td>'
++'<td><span class="badge badge-muted">'+d.mode+'</span></td><td>'+photoHtml+'</td></tr>';
+}).join(''):'<tr><td colspan="7" class="empty-state">Aucune dépense</td></tr>';
+}

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Gestion Funéraire</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 :root{--night:#0d0d0d;--surface:#111111;--panel:#1a1a1a;--border:#2a2a2a;--muted:#444444;--text-dim:#8b8b8b;--text:#d4d0c8;--white:#f7f4ee;--blue:#C8973A;--blue-dim:#a67828;--green:#3fb950;--green-dim:#238636;--orange:#d29922;--red:#f85149;--red-dim:#da3633;--purple:#8957e5;--accent:#C8973A;--gold:#C8973A;}
@@ -612,10 +613,20 @@ tr:last-child td{border-bottom:none;}
         <option value="salaires">Salaires</option>
         <option value="stocks_hist">Historique des stocks</option>
         <option value="performance">📊 Performance du personnel</option>
+        <option value="morguier">👷 Corps par morguier de garde</option>
        </select>
       </div>
       <div style="display:flex;align-items:flex-end;gap:8px">
        <button class="btn btn-primary btn-full" onclick="genRapportPeriode()">🔍 Générer</button>
+      </div>
+     </div>
+     <!-- Filtre agent performance -->
+     <div id="rp-agent-filter" style="display:none;margin-bottom:10px">
+      <div class="field">
+       <label>👤 Filtrer par agent</label>
+       <select id="rp-agent-sel" onchange="filtrerParAgent()">
+        <option value="">— Tous les agents —</option>
+       </select>
       </div>
      </div>
      <!-- Résumé période -->
@@ -742,6 +753,44 @@ tr:last-child td{border-bottom:none;}
     </div>
    </div>
 
+   <!-- PAGE ABONNEMENT -->
+   <div class="page" id="page-abonnement">
+    <div style="padding:16px;max-width:600px;margin:0 auto">
+
+     <!-- Bannière statut -->
+     <div id="abo-banniere" style="background:linear-gradient(135deg,#0f3460,#16213e);border-radius:12px;padding:20px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+      <div>
+       <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;opacity:0.7;color:#fff;margin-bottom:4px">Votre abonnement</div>
+       <div style="font-size:18px;font-weight:700;color:#fff" id="abo-nom-plan">Chargement...</div>
+       <div style="font-size:12px;opacity:0.7;color:#fff;margin-top:4px" id="abo-date-exp"></div>
+      </div>
+      <div style="text-align:right">
+       <div style="font-size:36px;font-weight:800;color:#e2b04a;line-height:1" id="abo-jours">—</div>
+       <div style="font-size:12px;opacity:0.8;color:#fff">jours restants</div>
+      </div>
+     </div>
+
+     <!-- Toggle mensuel/annuel -->
+     <div style="display:flex;justify-content:center;align-items:center;gap:12px;margin-bottom:24px">
+      <span id="abo-label-mensuel" style="font-size:14px;font-weight:700;color:var(--accent)">Mensuel</span>
+      <button onclick="aboTogglePeriode()" id="abo-toggle" style="position:relative;width:52px;height:28px;background:#444;border-radius:14px;border:none;cursor:pointer;transition:background 0.3s">
+       <span id="abo-toggle-knob" style="position:absolute;top:3px;left:3px;width:22px;height:22px;background:white;border-radius:50%;transition:transform 0.3s;display:block"></span>
+      </button>
+      <span id="abo-label-annuel" style="font-size:14px;color:var(--text-dim)">Annuel</span>
+      <span style="background:#e2b04a;color:#1a1a1a;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">-20%</span>
+     </div>
+
+     <!-- Plans -->
+     <div id="abo-grille" style="display:flex;flex-direction:column;gap:14px"></div>
+
+     <!-- Historique -->
+     <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
+      <h3 style="font-size:14px;font-weight:700;color:var(--white);margin-bottom:12px">📋 Historique des paiements</h3>
+      <div id="abo-historique" style="font-size:13px;color:var(--text-dim)">Chargement...</div>
+     </div>
+    </div>
+   </div>
+
   </div><!-- end #content -->
  </div><!-- end #body-area -->
 </div><!-- end #app -->
@@ -768,6 +817,12 @@ tr:last-child td{border-bottom:none;}
     <div class="field"><label>Formol utilisé (L) *</label><input type="number" id="c-formol" min="0" step="0.5" oninput="checkFml()"></div>
     <div class="field"><label>&nbsp;</label><div id="fml-warn" style="color:var(--red);font-size:11px;padding-top:4px"></div></div>
     <div class="field form-full"><label>Observations</label><textarea id="c-obs"></textarea></div>
+    <div class="field form-full">
+     <label>👷 Morguier de garde *</label>
+     <select id="c-morguier">
+      <option value="">— Sélectionner le morguier de garde —</option>
+     </select>
+    </div>
     <hr class="section-sep">
     <div class="section-title">Informations du déposant</div>
     <div class="field"><label>Nom *</label><input type="text" id="d-nom"></div>
@@ -1390,6 +1445,7 @@ function resetPhotoField(key){
 var SB_URL='https://gvamgrzrkxsqpvizmycw.supabase.co';
 var SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd2YW1ncnpya3hzcXB2aXpteWN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzMjQ0MDUsImV4cCI6MjA5NjkwMDQwNX0.HEOJq16ffFnfE4Pmog7Amxn10Auy5jA72N5TwY0-bM0';
 var sb=supabase.createClient(SB_URL,SB_KEY);
+emailjs.init('uP7YuitU4aunee4Ya');
 
 async function fetchProfil(userId){
  var r=await sb.from('profils').select('*').eq('id',userId).single();
@@ -1414,6 +1470,37 @@ async function entrerApp(u){
  el('app').style.display='flex';
  sv('user-display',u.nom); sv('user-role-display',u.role);
  el('user-avatar').textContent=u.nom[0];
+
+ /* ══ ÉCRAN DE BIENVENUE ══ */
+ var msgs=[
+  'Chaque famille mérite dignité et professionnalisme. 🕊️',
+  'Votre dévouement fait une vraie différence pour les familles. 💛',
+  'Accueillez chaque famille avec empathie et respect. 🤝',
+  'Votre travail honore ceux qui ne peuvent plus parler. 🙏',
+  'La rigueur aujourd\'hui, c\'est la confiance de demain. ⭐',
+  'Un service funéraire de qualité commence par vous. 🌟',
+  'Soyez attentifs aux besoins de chaque famille endeuillée. 💙',
+  'La compassion est votre plus grande force. 🌿',
+  'Chaque dossier est une histoire de vie. Traitez-le avec soin. 📋',
+  'Votre professionnalisme apaise les familles dans l\'épreuve. 🕯️'
+ ];
+ var bvMsg=msgs[Math.floor(Math.random()*msgs.length)];
+ var bvEtab=TARIFS.etab||u.nom||'Gestion Funéraire';
+ var bvLogo=TARIFS.logo;
+ var bv=document.createElement('div');
+ bv.id='bienvenue-screen';
+ bv.style.cssText='position:fixed;inset:0;background:var(--night);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;padding:24px;text-align:center;';
+ bv.innerHTML='<div style="margin-bottom:20px">'+(bvLogo?'<img src="'+bvLogo+'" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid var(--or)">':'<div style="width:80px;height:80px;border-radius:50%;background:var(--panel);border:3px solid var(--or);display:flex;align-items:center;justify-content:center;font-size:36px;margin:auto">🏥</div>')+'</div>'
+  +'<div style="font-size:11px;color:var(--or);text-transform:uppercase;letter-spacing:.15em;margin-bottom:8px">Bienvenue</div>'
+  +'<div style="font-size:20px;font-weight:700;color:var(--white);margin-bottom:4px">'+bvEtab+'</div>'
+  +'<div style="font-size:13px;color:var(--text-dim);margin-bottom:28px">'+u.nom+' — '+u.role+'</div>'
+  +'<div style="font-size:14px;color:var(--text);max-width:300px;line-height:1.6;margin-bottom:28px;font-style:italic">'+bvMsg+'</div>'
+  +'<div style="width:200px;height:3px;background:var(--border);border-radius:2px;overflow:hidden"><div id="bv-bar" style="height:100%;width:0%;background:var(--or);transition:width 10s linear"></div></div>'
+  +'<div style="margin-top:16px;font-size:11px;color:var(--text-dim)">Appuyez pour continuer</div>';
+ bv.onclick=function(){bv.remove();};
+ document.body.appendChild(bv);
+ setTimeout(function(){var b=document.getElementById('bv-bar');if(b)b.style.width='100%';},100);
+ setTimeout(function(){var s=document.getElementById('bienvenue-screen');if(s)s.remove();},10200);
  /* Masquer menus selon le rôle */
  if(u.role==='Agent'){
   document.querySelectorAll('.admin-only').forEach(function(x){x.style.display='none';});
@@ -1424,7 +1511,6 @@ async function entrerApp(u){
   document.querySelectorAll('.admin-only').forEach(function(x){x.style.display='';});
  }
  await chargerCloud().then(function(res){if(res&&res.ts)DERNIER_CLOUD_TS=res.ts;});
- /* Charger le plan d'abonnement de l'organisation */
  await chargerPlanAbonnement();
  applyIdentite();
  updateBadgeNotifs();
@@ -1493,12 +1579,43 @@ async function doInscription(){
   await sb.from('app_data').upsert({organisation_id:data.organisation_id,cle:'contact_whatsapp',valeur:v('ins-tel').trim()},{onConflict:'organisation_id,cle'});
   await sb.from('app_data').upsert({organisation_id:data.organisation_id,cle:'pays',valeur:v('ins-pays')},{onConflict:'organisation_id,cle'});
  }
- alert('✓ Compte créé avec succès !\n\nÉtablissement : '+etab+'\nIdentifiant : '+login+'\n\nVous bénéficiez de 15 jours d\'essai gratuit.\nConnectez-vous dès maintenant !');
+ /* Envoi email automatique via EmailJS */
+ try {
+  await emailjs.send('service_c8043ar','template_o8sz65v',{
+   etablissement: etab,
+   nom_promoteur: nom,
+   whatsapp: v('ins-tel').trim(),
+   pays: v('ins-pays'),
+   login: login,
+   date: new Date().toLocaleDateString('fr-FR'),
+   name: nom,
+   email: 'gestionfuneraire.app@gmail.com'
+  });
+ } catch(e){ console.log('Email error:',e); }
+
+ /* Notification WhatsApp au propriétaire */
+ var telClient=v('ins-tel').trim();
+ var paysClient=v('ins-pays');
+ var msgWa='🆕 *Nouvelle inscription - Gestion Funéraire*%0A%0A'
+  +'🏥 *Établissement :* '+encodeURIComponent(etab)+'%0A'
+  +'👤 *Promoteur :* '+encodeURIComponent(nom)+'%0A'
+  +'📱 *WhatsApp :* '+encodeURIComponent(telClient)+'%0A'
+  +'🌍 *Pays :* '+encodeURIComponent(paysClient)+'%0A'
+  +'🔑 *Login :* '+encodeURIComponent(login)+'%0A%0A'
+  +'⏳ *Essai gratuit :* 15 jours%0A'
+  +'📅 *Date :* '+encodeURIComponent(new Date().toLocaleDateString('fr-FR'));
+ var waUrl='https://wa.me/2290162496691?text='+msgWa;
+
  el('inscription-screen').style.display='none';
  el('login-screen').style.display='flex';
  el('login-user').value=login;
  el('login-pass').value='';
- el('login-pass').focus();
+
+ /* Afficher popup avec bouton WhatsApp */
+ var popup=document.createElement('div');
+ popup.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;z-index:999;padding:20px;';
+ popup.innerHTML='<div style="background:#111;border:1px solid #2a2a2a;border-radius:12px;padding:28px 24px;max-width:340px;width:100%;text-align:center;"><div style="font-size:36px;margin-bottom:12px">&#x2705;</div><h3 style="color:#f7f4ee;font-size:16px;margin-bottom:8px">Compte cr&#233;&#233; avec succ&#232;s !</h3><p style="color:#8b8b8b;font-size:13px;margin-bottom:6px">&#201;tablissement : <strong style="color:#d4d0c8">'+etab+'</strong></p><p style="color:#8b8b8b;font-size:13px;margin-bottom:20px">Identifiant : <strong style="color:#C8973A">'+login+'</strong></p><p style="color:#8b8b8b;font-size:12px;margin-bottom:16px">&#x1F381; <strong style="color:#C8973A">15 jours essai gratuit</strong></p><a href="'+waUrl+'" target="_blank" style="display:block;background:#25D366;color:#fff;border-radius:8px;padding:12px;font-size:14px;font-weight:600;text-decoration:none;margin-bottom:10px">&#x1F4AC; Notifier le support WhatsApp</a><button onclick="this.parentElement.parentElement.remove();" style="background:none;border:none;color:#8b8b8b;font-size:12px;cursor:pointer;padding:8px;">Passer &#x2192; Se connecter</button></div>';
+document.body.appendChild(popup);
 }
 async function doLogin(){
  var lg=v('login-user').trim(),pw=v('login-pass'),err=el('login-error');
@@ -1522,7 +1639,7 @@ async function doLogin(){
  var orgRes=await sb.from('organisations').select('actif,abonnement_actif,date_essai_debut,type_abonnement,date_fin_abonnement').eq('id',profil.organisation_id).single();
  if(!orgRes.error && orgRes.data){
   var org=orgRes.data;
-  if(!org.actif){err.textContent='Cette structure est désactivée. Contactez le support.';err.style.display='block';await sb.auth.signOut();return;}
+  if(!org.actif){err.textContent='⛔ Structure désactivée. Veuillez vous réabonner ou contacter votre administrateur.';err.style.display='block';await sb.auth.signOut();return;}
   /* Vérifier si l'essai est expiré et pas d'abonnement actif */
   if(!org.abonnement_actif){
    var debut=new Date(org.date_essai_debut||org.created_at||Date.now());
@@ -1585,201 +1702,17 @@ async function doLogout(){
  el('login-user').value=''; el('login-pass').value='';
 }
 /* ════ ABONNEMENT & LIMITES ════ */
-var PLAN_ABONNEMENT = {
- plan: 'gratuit',       /* 'gratuit','starter','pro','premium' */
- actif: false,
- expiration: null,
- joursEssai: 0,
- statut: 'essai'        /* 'actif','essai','expiré' */
+var PLAN_ABONNEMENT={plan:'gratuit',actif:false,expiration:null,joursRestants:0,statut:'essai'};
+var LIMITES_PLAN={
+ gratuit: {corps_mois:50},
+ starter: {corps_mois:50},
+ pro:     {corps_mois:9999},
+ premium: {corps_mois:9999}
 };
-
-/* Limites par plan */
-var LIMITES_PLAN = {
- gratuit:  { corps_mois: 50,  structures: 1 },
- starter:  { corps_mois: 50,  structures: 1 },
- pro:      { corps_mois: 9999, structures: 3 },
- premium:  { corps_mois: 9999, structures: 9999 }
-};
-
 async function chargerPlanAbonnement(){
  if(!ORG_ID)return;
  try{
   var r=await sb.from('v_statut_abonnement').select('*').eq('id',ORG_ID).single();
   if(r.data){
-   PLAN_ABONNEMENT.plan    = r.data.abonnement_plan || 'gratuit';
-   PLAN_ABONNEMENT.actif   = r.data.abonnement_actif || false;
-   PLAN_ABONNEMENT.expiration = r.data.abonnement_expiration;
-   PLAN_ABONNEMENT.statut  = r.data.statut_global || 'essai';
-   PLAN_ABONNEMENT.joursEssai = r.data.jours_restants || 0;
-  }
-  /* Afficher badge si essai ou expiré */
-  var badge=el('badge-abo');
-  if(badge){
-   if(PLAN_ABONNEMENT.statut==='expiré'){badge.textContent='EXP';badge.style.display='';}
-   else if(PLAN_ABONNEMENT.statut==='essai'&&PLAN_ABONNEMENT.joursEssai<=5){badge.textContent=PLAN_ABONNEMENT.joursEssai+'j';badge.style.display='';}
-   else badge.style.display='none';
-  }
- }catch(e){console.warn('Erreur chargement plan:',e);}
-}
-
-function getLimitePlan(){
- var plan=PLAN_ABONNEMENT.plan||'gratuit';
- return LIMITES_PLAN[plan]||LIMITES_PLAN['gratuit'];
-}
-
-function verifierLimiteCorps(){
- /* Compter les corps enregistrés ce mois */
- var debut=new Date(); debut.setDate(1); debut.setHours(0,0,0,0);
- var moisCourant=today().substring(0,7); /* YYYY-MM */
- var corpsMois=corps.filter(function(c){
-  return c.arr&&c.arr.substring(0,7)===moisCourant;
- }).length;
- var limite=getLimitePlan().corps_mois;
- if(corpsMois>=limite){
-  return {ok:false,message:'⚠️ Limite atteinte\n\nVotre plan '+PLAN_ABONNEMENT.plan.charAt(0).toUpperCase()+PLAN_ABONNEMENT.plan.slice(1)+' est limité à '+limite+' corps par mois.\n\nVous avez enregistré '+corpsMois+' corps ce mois-ci.\n\nUpgradez votre abonnement pour continuer.'};
- }
- return {ok:true};
-}
-
-function verifierEtOuvrirCorps(){
- var chk=verifierLimiteCorps();
- if(!chk.ok){alert(chk.message);return;}
- openModal('modal-corps');
-}
-
-function ouvrirAbonnement(){
- closeSidebar();
- window.open('abonnement.html','_blank');
-}
-
-async function forceLogoutDesactive(){
- await sb.auth.signOut();
- CU=null;
- viderDonneesMemoire();
- el('app').style.display='none';
- el('pwchange-screen').style.display='none';
- el('login-screen').style.display='flex';
- el('login-user').value=''; el('login-pass').value='';
- var err=el('login-error');
- err.textContent='Session désactivée, veuillez contacter votre administrateur.';
- err.style.display='block';
-}
-/* Vérifie périodiquement si le compte connecté a été désactivé (Agents uniquement) */
-setInterval(async function(){
- if(!CU)return;
- if(CU.role!=='Agent')return;
- var profil=await fetchProfil(CU.id);
- if(!profil||!profil.actif)forceLogoutDesactive();
-},15000);
-
-/* Reprise automatique de session (session gérée par Supabase) */
-async function tenterReprise(){
- var res=await sb.auth.getSession();
- var session=res.data&&res.data.session;
- if(!session)return false;
- var uid=session.user.id;
- var profil=await fetchProfil(uid);
- if(!profil||!profil.actif){await sb.auth.signOut();return false;}
- if(pwExpired(profil)){afficherChangementMdp(uid,profil);return true;}
- await entrerApp(profilVersCU(uid,profil));
- return true;
-}
-el('login-pass').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
-el('pwchange-confirm').addEventListener('keydown',function(e){if(e.key==='Enter')doChangePassword();});
-el('ins-pass2').addEventListener('keydown',function(e){if(e.key==='Enter')doInscription();});
-
-/* Reprise automatique de session au chargement de la page
-   (ex : retour après prise de photo qui a déchargé l'app) */
-tenterReprise();
-
-/* ════ SIDEBAR ════ */
-function toggleSidebar(){el('sidebar').classList.toggle('open');el('sidebar-overlay').classList.toggle('show');}
-function closeSidebar(){el('sidebar').classList.remove('open');el('sidebar-overlay').classList.remove('show');}
-
-/* ════ NAVIGATION ════ */
-var PT={dashboard:'Tableau de bord',corps:'Enregistrer un corps',retrait:'Retrait de corps',
- facturation:'Facturation',recettes:'Recettes',depenses:'Dépenses',stocks:'Stocks',
- personnel:'Personnel',salaires:'Salaires',rapports:'Rapports & Stats',
- journal:"Journal d'activités",utilisateurs:'Utilisateurs',parametres:'Paramètres'};
-
-/* ════ HISTORIQUE DE NAVIGATION (bouton retour global) ════ */
-var NAV_HISTORY=[];
-function navTo(id,navEl){
- /* Empiler la page précédente dans l'historique avant de changer */
- var pageActuelle=document.querySelector('.page.active');
- if(pageActuelle){
-  var idActuel=pageActuelle.id.replace('page-','');
-  if(idActuel!==id)NAV_HISTORY.push(idActuel);
-  if(NAV_HISTORY.length>30)NAV_HISTORY.shift(); /* limiter la taille */
- }
- document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
- el('page-'+id).classList.add('active');
- document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active');});
- if(navEl) navEl.classList.add('active');
- sv('page-title',PT[id]||id);
- rp(id); closeSidebar();
- updateBoutonRetour();
- window.scrollTo({top:0,behavior:'instant'});
-}
-function retourArriere(){
- /* Si un panneau facture est ouvert, le fermer en priorité avant de changer de page */
- var factPanel=el('fact-panel');
- if(factPanel&&factPanel.style.display==='block'&&selC){
-  fermerPanneauFacture();
-  return;
- }
- if(NAV_HISTORY.length===0)return;
- var precedente=NAV_HISTORY.pop();
- document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
- el('page-'+precedente).classList.add('active');
- document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active');});
- var navEl=document.querySelector('[onclick="navTo(\''+precedente+'\',this)"]');
- if(navEl)navEl.classList.add('active');
- sv('page-title',PT[precedente]||precedente);
- rp(precedente);
- updateBoutonRetour();
- window.scrollTo({top:0,behavior:'instant'});
-}
-function updateBoutonRetour(){
- var btn=el('btn-back-global');
- var factPanel=el('fact-panel');
- var factureOuverte=factPanel&&factPanel.style.display==='block'&&selC;
- if(btn)btn.style.display=(NAV_HISTORY.length>0||factureOuverte)?'flex':'none';
-}
-
-function initApp(){
- genNum(); fillSalSel();
- var pages=['dashboard','corps','retrait','facturation','recettes','depenses','stocks','personnel','salaires','journal','utilisateurs','rapports'];
- pages.forEach(rp);
-}
-
-function rp(id){
- var m={dashboard:rdDash,corps:rdCorps,retrait:rdRetrait,facturation:rdFact,
-  recettes:rdRec,depenses:rdDep,stocks:rdStk,personnel:rdPers,
-  salaires:rdSal,journal:rdJnl,utilisateurs:rdUsr,rapports:rdRpts};
- if(m[id]) m[id]();
-}
-
-/* ════ DASHBOARD ════ */
-function rdDash(){
- var cons=corps.filter(function(c){return c.st==='Conservé';});
- var retires=corps.filter(function(c){return c.st==='Retiré';});
- var al5=cons.filter(function(c){return jR(c.arr)<=5&&jR(c.arr)>=0;});
- var depasse=cons.filter(function(c){return jR(c.arr)<0;});
- var tj=today();
- var recJ=recettes.filter(function(r){return r.ret===tj;}).reduce(function(s,r){return s+r.paye;},0);
- var depJ=depenses.filter(function(d){return d.date===tj;}).reduce(function(s,d){return s+d.mt;},0);
- var totR=recettes.reduce(function(s,r){return s+r.paye;},0);
- var totD=depenses.reduce(function(s,d){return s+d.mt;},0);
- var totS=salaires.reduce(function(s,x){return s+x.net;},0);
- sv('s-total',corps.length); sv('s-cons',cons.length);
- sv('s-retires',retires.length); sv('s-ech',al5.length); sv('s-depasse',depasse.length);
- sv('s-rec',fmt(recJ)); sv('s-dep',fmt(depJ)); sv('s-sol',fmt(totR-totD-totS));
- sv('badge-alerte',al5.length);
- sv('badge-stock',stocks.filter(function(s){return s.q<=s.min;}).length);
- var da=el('dash-alert');
- if(al5.length>0){da.style.display='flex';sv('dash-alert-txt',al5.length+' corps proches de l\'échéance légale (≤ 5 jours).');}
- else da.style.display='none';
- el('dash-tbl').innerHTML=cons.length?cons.map(function(c){
-  var jr=jR(c.arr),bd=jr<0?'badge-red':jr<=5?'badge-orange':'badge-green';
-  var lb=jr<0?'
+   PLAN_ABONNEMENT.plan=r.data.abonnement_plan||'gratuit';
+   PLAN_ABONN
